@@ -1,0 +1,413 @@
+<!DOCTYPE html>
+<html lang="fr">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
+<meta name="theme-color" content="#101012">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+<meta name="apple-mobile-web-app-title" content="Fractionné">
+<link rel="manifest" href="manifest.webmanifest">
+<link rel="apple-touch-icon" href="icon-180.png">
+<title>Fractionné</title>
+<style>
+/* VOICE: sport, direct, lisible d'un coup d'œil en courant
+   IDEA: le tableau d'un chrono de piste
+   PICTURE: la bande du programme (blocs course / marche) + un énorme chiffre
+   COLOUR and TYPE: orange course #ff4f00, bleu marche #2448ff, fond nuit ; system-ui très gras, chiffres tabulaires
+   LAYOUT: une colonne de réglages puis Démarrer ; en séance, plein écran à la couleur de la phase */
+:root{color-scheme:light dark;--bg:light-dark(#f3f2ef,#101012);--ink:light-dark(#121214,#f3f3f3);--mute:light-dark(#5d5d63,#a1a1a8);--card:light-dark(#fff,#1b1b1f);--line:light-dark(#dcdbd6,#2e2e34);--run:#ff4f00;--walk:#2448ff}
+:root[data-theme=light]{color-scheme:light}:root[data-theme=dark]{color-scheme:dark}
+*{box-sizing:border-box;min-width:0}
+html,body{min-height:100%}
+body{margin:0;background:var(--bg);color:var(--ink);font:16px/1.5 system-ui,-apple-system,"Segoe UI",Roboto,sans-serif;overflow-x:clip;-webkit-tap-highlight-color:transparent}
+.num,input{font-variant-numeric:tabular-nums}
+#setup,#done,#run{display:none}
+body[data-view=setup] #setup,body[data-view=done] #done{display:block}
+body[data-view=run] #run{display:flex}
+main{max-width:520px;margin:0 auto;padding:calc(env(safe-area-inset-top) + 20px) 18px calc(env(safe-area-inset-bottom) + 28px)}
+h1{font-size:34px;line-height:1.05;margin:4px 0 16px;font-weight:800;letter-spacing:-.02em}
+.strip{display:flex;gap:2px;height:46px;padding:3px;background:#000;border-radius:10px;position:relative;overflow:hidden}
+.strip i{flex:1 1 0;border-radius:4px;min-width:2px}
+.strip i.run{background:var(--run)}.strip i.walk{background:var(--walk)}
+.strip .shade{position:absolute;left:0;top:0;bottom:0;width:0;background:rgba(0,0,0,.62)}
+.strip .mark{position:absolute;top:0;bottom:0;left:0;width:3px;margin-left:-1px;background:#fff;display:none}
+#run .strip .mark{display:block}
+.sum{display:flex;justify-content:space-between;align-items:baseline;gap:12px;margin:12px 2px 6px;flex-wrap:wrap}
+.sum b{font-size:40px;line-height:1;font-weight:800}
+.sum span{color:var(--mute);font-weight:600}
+.row{display:flex;align-items:center;justify-content:space-between;gap:10px;padding:12px 12px 12px 16px;background:var(--card);border:1px solid var(--line);border-radius:14px;margin-top:10px}
+.t{font-weight:700;font-size:17px;display:flex;align-items:center;gap:10px}
+.dot{width:12px;height:12px;border-radius:50%;flex:none}
+.ctl{display:flex;align-items:center;gap:4px}
+.ctl button{width:44px;height:44px;border-radius:50%;border:1px solid var(--line);background:transparent;color:var(--ink);font-size:24px;line-height:1;cursor:pointer;flex:none}
+.ctl input{width:2.3em;height:44px;text-align:center;font:800 22px system-ui,sans-serif;border:0;background:transparent;color:var(--ink);border-radius:8px;-moz-appearance:textfield;padding:0}
+.ctl input:focus{background:var(--line);outline:none}
+.ctl .c{font-weight:800;font-size:22px}
+input::-webkit-outer-spin-button,input::-webkit-inner-spin-button{-webkit-appearance:none;margin:0}
+.sw{appearance:none;-webkit-appearance:none;width:52px;height:32px;border-radius:16px;background:var(--line);position:relative;transition:background .2s;flex:none;margin:6px 0;cursor:pointer}
+.sw::after{content:"";position:absolute;top:3px;left:3px;width:26px;height:26px;border-radius:50%;background:#fff;transition:transform .2s;box-shadow:0 1px 3px rgba(0,0,0,.3)}
+.sw:checked{background:var(--run)}.sw:checked::after{transform:translateX(20px)}
+.sub{display:block;font-weight:500;font-size:13px;color:var(--mute)}
+.btn{display:block;width:100%;height:62px;border-radius:16px;border:0;font:800 20px system-ui,sans-serif;margin-top:12px;cursor:pointer}
+.primary{background:var(--run);color:#111}
+.ghost{background:transparent;border:1.5px solid var(--line);color:var(--ink);height:50px;font-size:16px;font-weight:700}
+:focus-visible{outline:3px solid var(--walk);outline-offset:2px}
+.note{color:var(--mute);font-size:14px;margin-top:18px}
+.note p{margin:0 0 6px}
+#run{position:fixed;inset:0;flex-direction:column;padding:calc(env(safe-area-inset-top) + 14px) 18px calc(env(safe-area-inset-bottom) + 16px);background:#26262b;color:#fff;transition:background .35s}
+body[data-phase=run] #run{background:var(--run);color:#111}
+body[data-phase=walk] #run{background:var(--walk);color:#fff}
+.top{display:flex;justify-content:space-between;gap:10px;font-weight:700;font-size:18px}
+.mid{flex:1;display:flex;flex-direction:column;justify-content:center;align-items:center;text-align:center}
+#phase{font-size:clamp(44px,13vw,76px);font-weight:800;line-height:1}
+#count{font-size:clamp(96px,33vw,240px);font-weight:800;line-height:.95;letter-spacing:-.03em;margin:6px 0}
+#next{font-size:18px;font-weight:600;opacity:.85;min-height:27px}
+body.paused #count{opacity:.45}
+.pbar{width:100%;max-width:520px;height:8px;border-radius:4px;background:rgba(0,0,0,.22);margin:16px 0 10px;overflow:hidden}
+.pbar b{display:block;height:100%;background:currentColor;width:0}
+.ctrls{display:grid;grid-template-columns:1fr 1fr 1fr;gap:10px;margin-top:14px}
+.ctrls button{height:56px;border-radius:14px;border:0;font:800 17px system-ui,sans-serif;background:rgba(0,0,0,.22);color:inherit;cursor:pointer}
+.ctrls .big{grid-column:1/-1;height:64px;background:rgba(0,0,0,.85);color:#fff;font-size:20px}
+#wl{font-size:13px;opacity:.75;text-align:center;margin-top:10px}
+#pocket{position:fixed;inset:0;z-index:5;background:#000;color:#fff;display:flex;flex-direction:column;align-items:center;justify-content:center;gap:6px;touch-action:none;user-select:none;-webkit-user-select:none;-webkit-touch-callout:none}
+#pocket[hidden]{display:none}
+#pPhase{font-size:40px;font-weight:800}
+#pCount{font-size:clamp(90px,30vw,210px);font-weight:800;line-height:1}
+body[data-phase=run] #pocket #pPhase,body[data-phase=run] #pCount{color:var(--run)}
+body[data-phase=walk] #pocket #pPhase,body[data-phase=walk] #pCount{color:#7d93ff}
+.hint{color:#8a8a90;font-size:15px;margin-top:28px}
+.hold{width:180px;height:4px;background:#333;border-radius:2px;overflow:hidden}
+.hold b{display:block;height:100%;width:0;background:#fff}
+#done h1{font-size:52px;margin-top:24px}
+@media (prefers-reduced-motion:reduce){*{transition:none!important}}
+</style>
+</head>
+<body data-view="setup">
+
+<main id="setup">
+  <h1>Fractionné</h1>
+  <div class="strip" id="stripS" aria-hidden="true"></div>
+  <div class="sum"><b class="num" id="total">0:00</b><span class="num" id="formula"></span></div>
+
+  <div class="row">
+    <span class="t"><span class="dot" style="background:var(--run)"></span>Course</span>
+    <div class="ctl">
+      <button type="button" data-k="run" data-step="-15" aria-label="Moins 15 secondes de course">−</button>
+      <input id="runM" inputmode="numeric" type="number" min="0" max="99" aria-label="Minutes de course"><span class="c">:</span><input id="runS" inputmode="numeric" type="number" min="0" max="59" aria-label="Secondes de course">
+      <button type="button" data-k="run" data-step="15" aria-label="Plus 15 secondes de course">+</button>
+    </div>
+  </div>
+  <div class="row">
+    <span class="t"><span class="dot" style="background:var(--walk)"></span>Marche</span>
+    <div class="ctl">
+      <button type="button" data-k="walk" data-step="-15" aria-label="Moins 15 secondes de marche">−</button>
+      <input id="walkM" inputmode="numeric" type="number" min="0" max="99" aria-label="Minutes de marche"><span class="c">:</span><input id="walkS" inputmode="numeric" type="number" min="0" max="59" aria-label="Secondes de marche">
+      <button type="button" data-k="walk" data-step="15" aria-label="Plus 15 secondes de marche">+</button>
+    </div>
+  </div>
+  <div class="row">
+    <span class="t">Répétitions</span>
+    <div class="ctl">
+      <button type="button" data-k="reps" data-step="-1" aria-label="Une répétition de moins">−</button>
+      <input id="reps" inputmode="numeric" type="number" min="1" max="99" aria-label="Nombre de répétitions">
+      <button type="button" data-k="reps" data-step="1" aria-label="Une répétition de plus">+</button>
+    </div>
+  </div>
+  <label class="row"><span class="t" style="display:block">Annonce vocale<span class="sub">« Run! », « Walk », « Finished »</span></span><input type="checkbox" class="sw" id="voice"></label>
+  <label class="row"><span class="t" style="display:block">Bips 3-2-1<span class="sub">avant chaque changement</span></span><input type="checkbox" class="sw" id="ticks"></label>
+
+  <button class="btn primary" id="start" type="button">Démarrer</button>
+  <button class="btn ghost" id="test" type="button">Tester le son</button>
+
+  <div class="note">
+    <p>Lance ta musique d'abord, puis l'app. Le départ se fait après 5 s de préparation.</p>
+    <p>Garde l'écran allumé pendant la séance : l'app empêche la mise en veille, et le mode poche affiche un écran noir qui ignore les touches involontaires.</p>
+  </div>
+</main>
+
+<section id="run" aria-live="polite">
+  <div class="top num"><span id="rep"></span><span id="left"></span></div>
+  <div class="mid">
+    <div id="phase"></div>
+    <div id="count" class="num">0:00</div>
+    <div id="next"></div>
+    <div class="pbar"><b id="pbar"></b></div>
+  </div>
+  <div class="strip" id="stripR" aria-hidden="true"></div>
+  <div class="ctrls">
+    <button type="button" class="big" id="pause">Pause</button>
+    <button type="button" id="skip">Passer</button>
+    <button type="button" id="pocketBtn">Mode poche</button>
+    <button type="button" id="stop">Arrêter</button>
+  </div>
+  <div id="wl"></div>
+</section>
+
+<div id="pocket" hidden>
+  <div id="pPhase"></div>
+  <div id="pCount" class="num"></div>
+  <div class="hint">Maintiens appuyé 1 s pour revenir</div>
+  <div class="hold"><b id="holdbar"></b></div>
+</div>
+
+<main id="done">
+  <h1>Terminé</h1>
+  <div class="strip" id="stripD" aria-hidden="true"></div>
+  <div class="sum"><b class="num" id="doneTotal"></b><span class="num" id="doneSum"></span></div>
+  <button class="btn primary" id="again" type="button">Recommencer</button>
+  <button class="btn ghost" id="edit" type="button">Modifier le programme</button>
+</main>
+
+<script>
+{
+const $ = id => document.getElementById(id);
+const KEY = 'fractionne:v1', PREP = 5;
+const S = {run: 420, walk: 60, reps: 5, voice: true, ticks: true};
+try { const v = JSON.parse(localStorage.getItem(KEY)); if (v && typeof v === 'object') Object.assign(S, v); } catch (e) {}
+const save = () => { try { localStorage.setItem(KEY, JSON.stringify(S)); } catch (e) {} };
+const clamp = (x, a, b) => Math.min(b, Math.max(a, x));
+const fmt = x => { x = Math.max(0, Math.ceil(x - 1e-6)); return Math.floor(x / 60) + ':' + String(x % 60).padStart(2, '0'); };
+const wall = () => Date.now() / 1000;
+const show = v => { document.body.dataset.view = v; };
+
+/* ---------- programme ---------- */
+function plan() {
+  S.run = Math.max(5, S.run);
+  const seg = [{t: 'prep', d: PREP, i: 0}];
+  for (let i = 1; i <= S.reps; i++) {
+    seg.push({t: 'run', d: S.run, i});
+    if (S.walk > 0) seg.push({t: 'walk', d: S.walk, i});
+  }
+  let a = 0;
+  for (const s of seg) { s.a = a; a += s.d; }
+  return {seg, total: a, reps: S.reps};
+}
+function drawStrip(el, p) {
+  const segs = p.seg.filter(s => s.t !== 'prep');
+  el.style.gap = segs.length > 40 ? '1px' : '2px';
+  el.innerHTML = segs.map(s => `<i class="${s.t}" style="flex-grow:${s.d}"></i>`).join('') + '<span class="shade"></span><span class="mark"></span>';
+}
+
+/* ---------- réglages ---------- */
+function syncInputs() {
+  for (const k of ['run', 'walk']) { $(k + 'M').value = Math.floor(S[k] / 60); $(k + 'S').value = String(S[k] % 60).padStart(2, '0'); }
+  $('reps').value = S.reps; $('voice').checked = S.voice; $('ticks').checked = S.ticks;
+  renderSetup();
+}
+function readInputs() {
+  for (const k of ['run', 'walk']) {
+    const m = parseInt($(k + 'M').value, 10) || 0, s = parseInt($(k + 'S').value, 10) || 0;
+    S[k] = clamp(m * 60 + s, 0, 99 * 60 + 59);
+  }
+  S.reps = clamp(parseInt($('reps').value, 10) || 1, 1, 99);
+  S.voice = $('voice').checked; S.ticks = $('ticks').checked;
+  save();
+}
+function renderSetup() {
+  const p = plan();
+  drawStrip($('stripS'), p);
+  $('total').textContent = fmt(p.total - PREP);
+  $('formula').textContent = `${S.reps} × (${fmt(S.run)} course${S.walk > 0 ? ' + ' + fmt(S.walk) + ' marche' : ''})`;
+}
+$('setup').addEventListener('input', () => { readInputs(); renderSetup(); });
+$('setup').addEventListener('change', () => { readInputs(); syncInputs(); });
+document.querySelectorAll('#setup input[type=number]').forEach(n => n.addEventListener('focus', () => { try { n.select(); } catch (e) {} }));
+$('setup').addEventListener('click', e => {
+  const b = e.target.closest('[data-k]'); if (!b) return;
+  const k = b.dataset.k, st = +b.dataset.step;
+  if (k === 'reps') S.reps = clamp(S.reps + st, 1, 99);
+  else S[k] = clamp(S[k] + st, k === 'run' ? 5 : 0, 99 * 60 + 59);
+  save(); syncInputs();
+});
+
+/* ---------- son ---------- */
+let ctx = null, nodes = [], base = 0;
+function audio() {
+  if (!ctx) {
+    // iOS : mélanger avec la musique au lieu de la couper
+    try { if (navigator.audioSession) navigator.audioSession.type = 'ambient'; } catch (e) {}
+    const AC = window.AudioContext || window.webkitAudioContext;
+    if (!AC) return null;
+    try { ctx = new AC(); } catch (e) { return null; }
+  }
+  if (ctx.state !== 'running') ctx.resume().catch(() => {});
+  return ctx;
+}
+function tone(f, t, d, v, type) {
+  const o = ctx.createOscillator(), g = ctx.createGain();
+  o.type = type; o.frequency.setValueAtTime(f, t);
+  g.gain.setValueAtTime(0.0001, t);
+  g.gain.exponentialRampToValueAtTime(v, t + 0.012);
+  g.gain.exponentialRampToValueAtTime(0.0001, t + d);
+  o.connect(g); g.connect(ctx.destination);
+  o.start(t); o.stop(t + d + 0.05);
+  nodes.push(g);
+}
+const CUES = {
+  run:  t => [660, 880, 1175].forEach((f, i) => tone(f, t + i * 0.12, 0.2, 0.32, 'square')),
+  walk: t => [784, 523].forEach((f, i) => tone(f, t + i * 0.3, 0.45, 0.7, 'triangle')),
+  tick: t => tone(1046, t, 0.09, 0.45, 'sine'),
+  end:  t => [523, 659, 784, 1046, 784, 1046].forEach((f, i) => tone(f, t + i * 0.16, i > 3 ? 0.5 : 0.2, 0.3, 'square'))
+};
+function clearAudio() { for (const g of nodes) { try { g.disconnect(); } catch (e) {} } nodes = []; }
+// Programme à l'avance tous les sons restants sur l'horloge audio : précis même si l'écran ralentit le JS.
+function scheduleFrom(el) {
+  clearAudio();
+  const c = audio(); if (!c || !P) return;
+  base = c.currentTime - el;
+  const at = x => Math.max(c.currentTime + 0.02, base + x);
+  for (const s of P.seg) {
+    const end = s.a + s.d;
+    if (s.t !== 'prep' && s.a >= el - 0.05) CUES[s.t](at(s.a));
+    if ((S.ticks || s.t === 'prep') && s.d >= 4) for (let k = 3; k >= 1; k--) if (end - k >= el) CUES.tick(at(end - k));
+  }
+  CUES.end(at(P.total));
+}
+let vt = null, frv = null;
+function speak(txt) {
+  if (!S.voice || !('speechSynthesis' in window)) return;
+  try {
+    speechSynthesis.cancel();
+    const u = new SpeechSynthesisUtterance(txt);
+    u.lang = 'en-US'; u.rate = 1.05; u.volume = 1;
+    if (!frv) { const vs = speechSynthesis.getVoices().filter(v => /^en/i.test(v.lang)); frv = vs.find(v => v.localService && /en-(US|GB)/i.test(v.lang)) || vs.find(v => v.localService) || vs[0] || null; }
+    if (frv) u.voice = frv;
+    speechSynthesis.speak(u);
+  } catch (e) {}
+}
+const say = (txt, delay) => { clearTimeout(vt); vt = setTimeout(() => speak(txt), delay); };
+const buzz = p => { try { navigator.vibrate && navigator.vibrate(p); } catch (e) {} };
+
+/* ---------- séance ---------- */
+let P = null, acc = 0, t0 = 0, running = false, idx = -1, loop = null, wl = null, armed = 0;
+const elapsed = () => acc + (running ? wall() - t0 : 0);
+const NAMES = {prep: 'Prêt ?', run: 'Cours', walk: 'Marche'};
+
+function start() {
+  readInputs();
+  P = plan(); acc = 0; t0 = wall(); running = true; idx = -1;
+  document.body.classList.remove('paused'); $('pause').textContent = 'Pause';
+  drawStrip($('stripR'), P);
+  audio(); scheduleFrom(0);
+  speak('Starting in 5 seconds'); // dans le geste : débloque la voix sur iPhone
+  lock(); show('run');
+  clearInterval(loop); loop = setInterval(update, 100); update();
+}
+function onEnter(s, prev) {
+  if (prev === -1) return;
+  if (s.t === 'run') { say(s.i === P.reps && P.reps > 1 ? 'Last set. Run!' : `Set ${s.i}. Run!`, 650); buzz([300, 100, 300]); }
+  if (s.t === 'walk') { say('Walk', 900); buzz([600]); }
+}
+function update() {
+  if (!P) return;
+  const el = elapsed();
+  if (el >= P.total) return finish();
+  const i = P.seg.findIndex(s => el < s.a + s.d);
+  if (i !== idx) { const prev = idx; idx = i; onEnter(P.seg[i], prev); }
+  const s = P.seg[i], rem = s.a + s.d - el, nx = P.seg[i + 1];
+  document.body.dataset.phase = s.t;
+  $('phase').textContent = $('pPhase').textContent = NAMES[s.t];
+  $('count').textContent = $('pCount').textContent = fmt(rem);
+  $('rep').textContent = s.t === 'prep' ? `${P.reps} série${P.reps > 1 ? 's' : ''}` : `Série ${s.i} / ${P.reps}`;
+  $('left').textContent = 'Reste ' + fmt(P.total - el);
+  $('next').textContent = !running ? 'En pause' : nx ? `Ensuite : ${nx.t === 'run' ? 'course' : 'marche'} ${fmt(nx.d)}` : 'Dernière ligne droite';
+  $('pbar').style.width = clamp((1 - rem / s.d) * 100, 0, 100) + '%';
+  const pct = clamp((el - PREP) / (P.total - PREP), 0, 1) * 100;
+  const st = $('stripR');
+  st.querySelector('.shade').style.width = pct + '%';
+  st.querySelector('.mark').style.left = pct + '%';
+  // Si l'horloge audio a été suspendue (écran éteint, appel…), on reprogramme les sons.
+  if (running && ctx) {
+    if (ctx.state !== 'running') ctx.resume().catch(() => {});
+    else if (Math.abs(ctx.currentTime - (base + el)) > 0.35) scheduleFrom(el);
+  }
+}
+function finish() {
+  running = false; clearInterval(loop); loop = null;
+  if (ctx && Math.abs(ctx.currentTime - (base + P.total)) > 0.6) { clearAudio(); CUES.end(ctx.currentTime + 0.05); }
+  say('Finished. Well done!', 1300); buzz([200, 100, 200, 100, 600]);
+  unlock(); hidePocket(); delete document.body.dataset.phase;
+  drawStrip($('stripD'), P);
+  $('doneTotal').textContent = fmt(P.total - PREP);
+  $('doneSum').textContent = `${P.reps} × (${fmt(S.run)} course${S.walk > 0 ? ' + ' + fmt(S.walk) + ' marche' : ''})`;
+  show('done');
+}
+function abort() {
+  running = false; clearInterval(loop); loop = null; clearAudio(); clearTimeout(vt);
+  try { speechSynthesis.cancel(); } catch (e) {}
+  unlock(); hidePocket(); P = null; delete document.body.dataset.phase;
+  syncInputs(); show('setup');
+}
+function togglePause() {
+  if (!P) return;
+  if (running) {
+    acc = elapsed(); running = false; clearAudio(); clearTimeout(vt);
+    try { speechSynthesis.cancel(); } catch (e) {}
+    $('pause').textContent = 'Reprendre'; document.body.classList.add('paused');
+  } else {
+    running = true; t0 = wall(); audio(); scheduleFrom(acc);
+    $('pause').textContent = 'Pause'; document.body.classList.remove('paused');
+  }
+  update();
+}
+function skip() {
+  if (!P || idx < 0) return;
+  const s = P.seg[idx];
+  acc = s.a + s.d; t0 = wall();
+  if (running) scheduleFrom(acc);
+  update();
+}
+
+/* ---------- écran ---------- */
+async function lock() {
+  try {
+    if (!('wakeLock' in navigator)) throw 0;
+    wl = await navigator.wakeLock.request('screen');
+    wl.addEventListener('release', () => { wl = null; });
+    $('wl').textContent = 'Écran maintenu allumé';
+  } catch (e) { $('wl').textContent = "Pense à garder l'écran allumé"; }
+}
+function unlock() { try { wl && wl.release(); } catch (e) {} wl = null; }
+document.addEventListener('visibilitychange', () => {
+  if (document.visibilityState === 'visible' && P && document.body.dataset.view === 'run') { if (!wl) lock(); update(); }
+});
+
+const pk = $('pocket'); let hold = null;
+const cancelHold = () => { clearTimeout(hold); $('holdbar').style.transition = 'none'; $('holdbar').style.width = '0'; };
+function hidePocket() { cancelHold(); pk.hidden = true; }
+pk.addEventListener('pointerdown', e => {
+  e.preventDefault();
+  $('holdbar').style.transition = 'width 1s linear'; $('holdbar').style.width = '100%';
+  hold = setTimeout(hidePocket, 1000);
+});
+['pointerup', 'pointercancel', 'pointerleave'].forEach(ev => pk.addEventListener(ev, cancelHold));
+pk.addEventListener('contextmenu', e => e.preventDefault());
+
+/* ---------- boutons ---------- */
+$('start').addEventListener('click', start);
+$('again').addEventListener('click', start);
+$('edit').addEventListener('click', () => { P = null; syncInputs(); show('setup'); });
+$('pause').addEventListener('click', togglePause);
+$('skip').addEventListener('click', skip);
+$('pocketBtn').addEventListener('click', () => { pk.hidden = false; });
+$('stop').addEventListener('click', () => {
+  if (Date.now() - armed < 3000) { armed = 0; $('stop').textContent = 'Arrêter'; return abort(); }
+  armed = Date.now(); $('stop').textContent = 'Confirmer ?';
+  setTimeout(() => { if (Date.now() - armed >= 2900) $('stop').textContent = 'Arrêter'; }, 3000);
+});
+$('test').addEventListener('click', () => {
+  readInputs();
+  const c = audio();
+  if (c) { const t = c.currentTime + 0.1; clearAudio(); CUES.run(t); CUES.walk(t + 1.4); CUES.end(t + 2.8); }
+  speak('Run. Walk. Finished.');
+});
+try { speechSynthesis.onvoiceschanged = () => { frv = null; }; } catch (e) {}
+
+syncInputs();
+try { if ('serviceWorker' in navigator && location.protocol === 'https:') navigator.serviceWorker.register('sw.js').catch(() => {}); } catch (e) {}
+}
+</script>
+</body>
+</html>
